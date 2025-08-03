@@ -1,0 +1,57 @@
+.container {
+  padding: 16px;
+  height: calc(100vh - 32px);
+}
+
+.column-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 16px;
+}
+
+.state-card, .history-card, .messages-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-card, .messages-card {
+  flex: 1;
+  overflow: hidden;
+}
+
+mat-card-content {
+  flex: 1;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+}
+
+.sensing {
+  color: #2196F3;
+}
+
+.countdown {
+  color: #FF9800;
+}
+
+.alarm {
+  color: #F44336;
+  font-weight: bold;
+}
+
+.authorized {
+  color: #4CAF50;
+}
+
+.connecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+}
