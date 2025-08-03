@@ -1,7 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
-import { Client, StompSubscription } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+// Ya no necesitamos StompJs o SockJS, así que estas importaciones se eliminan.
 import { environment } from '../../environment';
 
 interface RfidMessage {
@@ -16,68 +15,86 @@ interface RfidMessage {
   providedIn: 'root'
 })
 export class WebsocketService implements OnDestroy {
-  private stompClient: Client | null = null;
+  // Cambiamos el tipo de la conexión de 'Client' a 'WebSocket'
+  private ws: WebSocket | null = null;
   private messageSubject = new BehaviorSubject<RfidMessage | null>(null);
   private stateHistorySubject = new BehaviorSubject<{state: string, timestamp: Date}[]>([]);
   private allMessagesSubject = new BehaviorSubject<RfidMessage[]>([]);
-  private subscription?: StompSubscription;
+  // Ya no necesitamos StompSubscription
+  // private subscription?: StompSubscription;
 
   constructor() {
     this.initializeWebSocketConnection();
   }
 
   private initializeWebSocketConnection(): void {
-    const serverUrl = `http://${environment.wemos.ip}:${environment.wemos.port}/ws`;
+    // La URL para una conexión WebSocket debe empezar con 'ws://'
+    // y debe apuntar directamente al puerto del servidor sin sub-rutas adicionales.
+    const serverUrl = `ws://${environment.wemos.ip}:${environment.wemos.port}/`;
 
-    this.stompClient = new Client({
-      brokerURL: serverUrl,
-      reconnectDelay: 5000,
-      heartbeatIncoming: 4000,
-      heartbeatOutgoing: 4000,
-      webSocketFactory: () => new SockJS(serverUrl) as WebSocket
-    });
+    // Nos aseguramos de que no haya una conexión existente abierta
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      this.ws.close();
+    }
 
-    this.stompClient.onConnect = (frame) => {
-      console.log('Conectado al WebSocket:', frame);
+    try {
+      // Creamos una instancia del objeto WebSocket nativo
+      this.ws = new WebSocket(serverUrl);
 
-      this.subscription = this.stompClient?.subscribe('/topic/alarm', (message) => {
+      // Evento que se dispara cuando la conexión se abre exitosamente
+      this.ws.onopen = (event) => {
+        console.log('Conexión WebSocket establecida con éxito:', event);
+        // Opcionalmente puedes emitir un mensaje o cambiar el estado de la UI
+      };
+
+      // Evento que se dispara cuando se recibe un mensaje del servidor
+      this.ws.onmessage = (event) => {
+        console.log('Mensaje recibido:', event.data);
         try {
-          const msg: RfidMessage = JSON.parse(message.body);
+          // El mensaje es una cadena de texto, la parseamos como JSON
+          const msg: RfidMessage = JSON.parse(event.data);
           msg.timestamp = new Date();
           this.messageSubject.next(msg);
 
+          // Lógica para actualizar el historial de estados
           const currentState = this.messageSubject.getValue()?.state;
           if (currentState !== msg.state) {
             const history = this.stateHistorySubject.getValue();
             this.stateHistorySubject.next([...history, {state: msg.state, timestamp: msg.timestamp}]);
           }
 
+          // Lógica para actualizar el registro de todos los mensajes
           const allMessages = this.allMessagesSubject.getValue();
           this.allMessagesSubject.next([...allMessages, msg]);
         } catch (error) {
-          console.error('Error al procesar mensaje:', error);
+          console.error('Error al procesar el mensaje JSON:', error);
         }
-      });
-    };
+      };
 
-    this.stompClient.onStompError = (frame) => {
-      console.error('Error en STOMP:', frame.headers['message']);
-      this.messageSubject.next(null);
-    };
+      // Evento que se dispara cuando la conexión se cierra
+      this.ws.onclose = (event) => {
+        console.log('Conexión WebSocket cerrada:', event);
+        // Emite un estado nulo o de desconexión
+        this.messageSubject.next(null);
+        // Implementa la lógica de reconexión
+        console.log(`Reintentando la conexión en ${environment.reconnectInterval / 1000} segundos...`);
+        setTimeout(() => this.initializeWebSocketConnection(), environment.reconnectInterval);
+      };
 
-    this.stompClient.onWebSocketError = (error) => {
-      console.error('Error en WebSocket:', error);
-      this.messageSubject.next(null);
-    };
-
-    this.stompClient.onDisconnect = (frame) => {
-      console.log('Desconectado:', frame);
-      this.messageSubject.next(null);
-    };
-
-    this.stompClient.activate();
+      // Evento que se dispara en caso de error en la conexión
+      this.ws.onerror = (error) => {
+        console.error('Error en WebSocket:', error);
+        // Cierra la conexión de forma segura en caso de un error
+        this.ws?.close();
+      };
+    } catch (e) {
+      console.error('Error al intentar crear el WebSocket:', e);
+      // En caso de error de conexión inicial, reintentamos
+      setTimeout(() => this.initializeWebSocketConnection(), environment.reconnectInterval);
+    }
   }
 
+  // Métodos para que los componentes se suscriban a los datos
   getMessageObservable() {
     return this.messageSubject.asObservable();
   }
@@ -90,23 +107,23 @@ export class WebsocketService implements OnDestroy {
     return this.allMessagesSubject.asObservable();
   }
 
+  // Método para enviar un comando al servidor
   sendDeactivateCommand(): void {
-    if (this.stompClient?.connected) {
-      this.stompClient.publish({
-        destination: '/app/deactivate',
-        body: JSON.stringify({command: 'deactivate'})
-      });
+    // Verificamos si la conexión está abierta antes de enviar
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      // El comando se envía como una cadena JSON
+      this.ws.send(JSON.stringify({command: 'deactivate'}));
+      console.log('Comando "deactivate" enviado.');
     } else {
-      console.warn('STOMP client no está conectado');
+      console.warn('WebSocket no está conectado. No se pudo enviar el comando.');
     }
   }
 
+  // Implementamos el método ngOnDestroy para cerrar la conexión al destruir el servicio
   ngOnDestroy(): void {
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-    }
-    if (this.stompClient) {
-      this.stompClient.deactivate();
+    if (this.ws) {
+      console.log('Cerrando conexión WebSocket...');
+      this.ws.close();
     }
   }
 }
