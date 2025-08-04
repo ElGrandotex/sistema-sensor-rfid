@@ -1,4 +1,52 @@
 /* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+* {
+  box-sizing: border-box;
+}
+
+html, body { 
+  height: 100%; 
+  margin: 0;
+  padding: 0;
+}
+
+body { 
+  font-family: 'Inter', 'Roboto', "Helvetica Neue", sans-serif; 
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+/* Mejoras para Material Design */
+.mat-mdc-card {
+  transition: all 0.3s ease !important;
+}
+
+.mat-mdc-button {
+  transition: all 0.3s ease !important;
+}
+
+/* Animaciones suaves */
+* {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, 
+              box-shadow 0.3s ease, transform 0.3s ease;
+}

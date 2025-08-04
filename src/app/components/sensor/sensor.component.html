@@ -1,0 +1,292 @@
+<div class="sensor-page">
+  <!-- Header moderno -->
+  <div class="sensor-header">
+    <div class="header-left">
+      <button 
+        mat-fab 
+        class="back-button"
+        (click)="goHome()"
+        matTooltip="Volver al inicio">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <div class="header-info">
+        <div class="title-with-demo">
+          <h1 class="sensor-title">Sistema de Sensado RFID</h1>
+          <div class="demo-indicator" *ngIf="isDemoMode">
+            <mat-icon class="demo-icon">play_circle</mat-icon>
+            <span class="demo-text">MODO DEMO</span>
+          </div>
+        </div>
+        <div class="connection-status">
+          <mat-icon [class]="'status-icon ' + connectionStatus">{{getConnectionIcon()}}</mat-icon>
+          <span class="status-text">
+            {{isDemoMode ? 'Demo Activo' : (connectionStatus | titlecase)}}
+          </span>
+          <mat-icon class="pulse-dot" *ngIf="connectionStatus === 'connected'">fiber_manual_record</mat-icon>
+        </div>
+      </div>
+    </div>
+    
+    <div class="header-stats">
+      <div class="stat-item">
+        <mat-icon>event</mat-icon>
+        <span class="stat-number">{{totalEvents}}</span>
+        <span class="stat-label">Eventos</span>
+      </div>
+      <div class="stat-item" *ngIf="lastUpdateTime">
+        <mat-icon>schedule</mat-icon>
+        <span class="stat-time">{{lastUpdateTime | date:'HH:mm:ss'}}</span>
+        <span class="stat-label">Última actualización</span>
+      </div>
+      <div class="demo-controls" *ngIf="isDemoMode">
+        <button 
+          mat-raised-button 
+          class="stop-demo-button"
+          (click)="stopDemo()"
+          matTooltip="Detener modo demo">
+          <mat-icon>stop</mat-icon>
+          <span>Detener Demo</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard principal -->
+  <div class="dashboard-container" *ngIf="currentState">
+    <!-- Estado actual con indicador visual -->
+    <div class="status-section">
+      <mat-card class="status-card modern-card">
+        <div class="status-header">
+          <div class="status-icon-container">
+            <mat-icon class="status-main-icon" [class]="'state-' + currentState.state.toLowerCase()">
+              {{getStateIcon(currentState.state)}}
+            </mat-icon>
+            <div class="status-pulse" [class]="'pulse-' + currentState.state.toLowerCase()"></div>
+          </div>
+          <div class="status-info">
+            <h2 class="status-title">Estado Actual</h2>
+            <div class="status-badge" [class]="'badge-' + currentState.state.toLowerCase()">
+              {{currentState.state}}
+            </div>
+          </div>
+        </div>
+        
+        <mat-card-content class="status-content">
+          <div class="status-message" *ngIf="currentState.message">
+            <mat-icon>info</mat-icon>
+            <span>{{currentState.message}}</span>
+          </div>
+
+          <div class="countdown-section" *ngIf="currentState.countdown !== undefined && currentState.countdown >= 0">
+            <div class="countdown-header">
+              <mat-icon>timer</mat-icon>
+              <span>Cuenta regresiva: {{currentState.countdown}}</span>
+            </div>
+            <mat-progress-bar
+              mode="determinate"
+              [value]="countdownProgress"
+              [color]="currentState.state === 'COUNTDOWN' ? 'warn' : 'primary'"
+              class="modern-progress">
+            </mat-progress-bar>
+          </div>
+
+          <div class="uid-section" *ngIf="currentState.uid_status">
+            <mat-chip-set>
+              <mat-chip class="uid-chip">
+                <mat-icon matChipAvatar>nfc</mat-icon>
+                UID: {{currentState.uid_status}}
+              </mat-chip>
+            </mat-chip-set>
+          </div>
+
+          <div class="actions">
+            <button
+              mat-raised-button
+              class="deactivate-button"
+              (click)="deactivateAlarm()"
+              [disabled]="currentState.state !== 'COUNTDOWN' && currentState.state !== 'ALARM'">
+              <mat-icon>security</mat-icon>
+              Desactivar Alarma
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <!-- Gráficos y análisis -->
+    <div class="charts-section">
+      <div class="chart-row">
+        <!-- Gráfico de actividad del sensor -->
+        <mat-card class="chart-card modern-card">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>show_chart</mat-icon>
+              Actividad del Sensor en Tiempo Real
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="chart-container">
+              <canvas #sensorChart></canvas>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Gráfico de distribución de estados -->
+        <mat-card class="chart-card modern-card">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>donut_large</mat-icon>
+              Distribución de Estados
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="chart-container">
+              <canvas #stateChart></canvas>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </div>
+
+    <!-- Historial y logs -->
+    <div class="data-section">
+      <div class="data-row">
+        <!-- Historial de estados -->
+        <mat-card class="data-card modern-card">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon matBadge="{{stateHistory.length}}" matBadgeColor="accent">history</mat-icon>
+              Historial de Estados
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="table-container">
+              <table mat-table [dataSource]="stateHistory" class="modern-table">
+                <ng-container matColumnDef="state">
+                  <th mat-header-cell *matHeaderCellDef>Estado</th>
+                  <td mat-cell *matCellDef="let item">
+                    <div class="state-cell">
+                      <mat-icon class="table-icon" [class]="'state-' + item.state.toLowerCase()">
+                        {{getStateIcon(item.state)}}
+                      </mat-icon>
+                      <span [class]="'state-' + item.state.toLowerCase()">{{item.state}}</span>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="timestamp">
+                  <th mat-header-cell *matHeaderCellDef>Hora</th>
+                  <td mat-cell *matCellDef="let item">
+                    <span class="timestamp">{{item.timestamp | date:'HH:mm:ss'}}</span>
+                  </td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="['state', 'timestamp']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['state', 'timestamp'];" class="table-row"></tr>
+              </table>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Registro de eventos -->
+        <mat-card class="data-card modern-card">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon matBadge="{{allMessages.length}}" matBadgeColor="accent">list_alt</mat-icon>
+              Registro de Eventos
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="table-container">
+              <table mat-table [dataSource]="allMessages" class="modern-table">
+                <ng-container matColumnDef="state">
+                  <th mat-header-cell *matHeaderCellDef>Estado</th>
+                  <td mat-cell *matCellDef="let item">
+                    <div class="state-cell">
+                      <mat-icon class="table-icon" [class]="'state-' + item.state.toLowerCase()">
+                        {{getStateIcon(item.state)}}
+                      </mat-icon>
+                      <span [class]="'state-' + item.state.toLowerCase()">{{item.state}}</span>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="message">
+                  <th mat-header-cell *matHeaderCellDef>Mensaje</th>
+                  <td mat-cell *matCellDef="let item">{{item.message}}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="timestamp">
+                  <th mat-header-cell *matHeaderCellDef>Hora</th>
+                  <td mat-cell *matCellDef="let item">
+                    <span class="timestamp">{{item.timestamp | date:'HH:mm:ss'}}</span>
+                  </td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="['state', 'message', 'timestamp']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['state', 'message', 'timestamp'];" class="table-row"></tr>
+              </table>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado de conexión -->
+  <div *ngIf="!currentState && !isDemoMode" class="connecting-overlay">
+    <div class="connecting-content">
+      <div class="connecting-animation">
+        <mat-spinner diameter="60"></mat-spinner>
+        <div class="connecting-waves">
+          <div class="wave wave1"></div>
+          <div class="wave wave2"></div>
+          <div class="wave wave3"></div>
+        </div>
+      </div>
+      <h2>Estableciendo conexión...</h2>
+      <p>Conectando al sistema de sensado RFID Wemos D1 Mini</p>
+      <div class="connecting-stats">
+        <mat-icon>wifi_find</mat-icon>
+        <span>WebSocket iniciando...</span>
+      </div>
+      <div class="demo-suggestion">
+        <p>¿Quieres probar el sistema sin hardware?</p>
+        <button 
+          mat-raised-button 
+          class="demo-suggestion-button"
+          (click)="goHome()">
+          <mat-icon>play_circle</mat-icon>
+          Probar Modo Demo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mensaje específico para cuando se detiene el demo -->
+  <div *ngIf="!currentState && isDemoMode" class="demo-stopped-overlay">
+    <div class="connecting-content">
+      <div class="demo-stopped-icon">
+        <mat-icon>stop_circle</mat-icon>
+      </div>
+      <h2>Demo detenido</h2>
+      <p>El modo de demostración ha sido desactivado</p>
+      <div class="demo-stopped-actions">
+        <button 
+          mat-raised-button 
+          class="restart-demo-button"
+          (click)="startDemoMode()">
+          <mat-icon>replay</mat-icon>
+          Reiniciar Demo
+        </button>
+        <button 
+          mat-stroked-button 
+          class="go-home-button"
+          (click)="goHome()">
+          <mat-icon>home</mat-icon>
+          Ir al Inicio
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
